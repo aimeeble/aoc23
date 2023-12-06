@@ -61,6 +61,7 @@ func main() {
 	log.Printf("Loaded %d parts", len(parts))
 
 	// Find numbers near parts.
+	ratioSum := 0
 	for _, p := range parts {
 		log.Printf("Part %s at (x,y)=(%d,%d)", p.name, p.x, p.y)
 		for _, pnum := range numbers {
@@ -73,8 +74,15 @@ func main() {
 				continue // too far side-to-side
 			}
 			log.Printf("\tUses part number %d at (x,y)=(%d,%d)", pnum.value, pnum.x, pnum.y)
+
 			p.numbers = append(p.numbers, pnum)
 			pnum.used = true
+		}
+
+		if p.name == "*" && len(p.numbers) == 2 {
+			ratio := p.numbers[0].value * p.numbers[1].value
+			log.Printf("\t\tGear ratio: %d", ratio)
+			ratioSum += ratio
 		}
 	}
 
@@ -92,4 +100,5 @@ func main() {
 
 	log.Printf("")
 	log.Printf("Sum of non-orphaned part numbers: %d", sum)
+	log.Printf("Sum of ratios: %d", ratioSum)
 }
