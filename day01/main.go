@@ -2,10 +2,8 @@ package main
 
 import (
 	"aoc23/lib"
-	"fmt"
 	"log"
 	"os"
-	"strconv"
 )
 
 func main() {
@@ -15,20 +13,22 @@ func main() {
 	}
 
 	sum := 0
-	for _, line := range lines {
-		var numRunes []rune
-		for _, r := range line {
+	for ln, line := range lines {
+		var nums []int
+		log.Printf("---- Line (%2d): %q", ln+1, line)
+		for i, r := range line {
 			if lib.IsNum(r) {
-				numRunes = append(numRunes, r)
+				n := lib.RuneToDigit(r)
+				nums = append(nums, n)
+				log.Printf("Adding %d (int)", n)
+			} else if n, ok := lib.WordToNum(line[0 : i+1]); ok {
+				nums = append(nums, n)
+				log.Printf("Adding %d (str)", n)
 			}
 		}
 
-		log.Printf("Got %d digits", len(numRunes))
-		numStr := fmt.Sprintf("%d%d", lib.RuneToDigit(numRunes[0]), lib.RuneToDigit(numRunes[len(numRunes)-1]))
-		num, err := strconv.ParseInt(numStr, 10, 32)
-		if err != nil {
-			log.Fatalf("Error converting numbers: %v", err)
-		}
+		log.Printf("Got %d digits: %v", len(nums), nums)
+		num := nums[0]*10 + nums[len(nums)-1]
 		log.Printf("Got number %d", num)
 		sum += int(num)
 	}

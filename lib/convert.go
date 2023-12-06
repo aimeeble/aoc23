@@ -1,5 +1,9 @@
 package lib
 
+import (
+	"strings"
+)
+
 func RuneToDigit(r rune) int {
 	switch r {
 	case '0':
@@ -25,4 +29,28 @@ func RuneToDigit(r rune) int {
 	default:
 		return 0
 	}
+}
+
+func WordToNum(s string) (int, bool) {
+	switch {
+	case strings.HasSuffix(s, "one"):
+		return 1, true
+	case strings.HasSuffix(s, "two"):
+		return 2, true
+	case strings.HasSuffix(s, "three"):
+		return 3, true
+	case strings.HasSuffix(s, "four"):
+		return 4, true
+	case strings.HasSuffix(s, "five"):
+		return 5, true
+	case strings.HasSuffix(s, "six"):
+		return 6, true
+	case strings.HasSuffix(s, "seven"):
+		return 7, true
+	case strings.HasSuffix(s, "eight"):
+		return 8, true
+	case strings.HasSuffix(s, "nine"):
+		return 9, true
+	}
+	return 0, false
 }
