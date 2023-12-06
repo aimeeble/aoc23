@@ -2,7 +2,9 @@ package main
 
 import (
 	"aoc23/lib"
+	"flag"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"sort"
@@ -10,6 +12,12 @@ import (
 	"strings"
 	"sync"
 	"time"
+)
+
+var (
+	verbose    = flag.Bool("verbose", false, "verbosely print solution tables")
+	batchSize  = flag.Int("batch_size", 10_000_000, "number of seeds per batch (for part 2)")
+	numWorkers = flag.Int("num_workers", 20, "number of worker goroutines (for part 2)")
 )
 
 type modeState int
@@ -93,6 +101,12 @@ func (tm *thingMap) Get(id int, typeName string) int {
 
 type onEachFun func(origId int, dstType string, dstId int)
 
+func verbPrintf(w io.Writer, msgfmt string, args ...any) {
+	if *verbose {
+		fmt.Fprintf(w, msgfmt, args...)
+	}
+}
+
 func printMaps(
 	startType string,
 	things map[string]map[string]*thingMap,
@@ -101,19 +115,21 @@ func printMaps(
 ) {
 	var sb strings.Builder
 	next := startType
-	//fmt.Fprintf(&sb, "%15s", "seed")
+	verbPrintf(&sb, "%15s", "seed")
 	for len(things[next]) > 0 {
 		for x := range things[next] {
 			next = x
-			//fmt.Fprintf(&sb, "%15s", x)
+			verbPrintf(&sb, "%15s", x)
 			break
 		}
 	}
-	//sb.WriteString("\n")
+	if *verbose {
+		sb.WriteString("\n")
+	}
 
 	var printMapsInner func(origId int, srcType string, id int, sb *strings.Builder, onEach onEachFun)
 	printMapsInner = func(origId int, srcType string, id int, sb *strings.Builder, onEach onEachFun) {
-		//fmt.Fprintf(sb, "%15d", id)
+		verbPrintf(sb, "%15d", id)
 		srcMap := things[srcType]
 		for dstType, curMap := range srcMap {
 			nextId := curMap.Get(id, srcType)
@@ -127,12 +143,19 @@ func printMaps(
 		printMapsInner(id, startType, id, &sb, func(origId int, dstType string, dstId int) {
 			onEach(origId, dstType, dstId)
 		})
-		//sb.WriteString("\n")
+		if *verbose {
+			sb.WriteString("\n")
+		}
 	}
-	//fmt.Printf("%s\n", sb.String())
+
+	if *verbose {
+		fmt.Printf("%s\n", sb.String())
+	}
 }
 
 func main() {
+	flag.Parse()
+
 	lines, err := lib.GetInputAll(os.Stdin)
 	if err != nil {
 		log.Fatalf("Failed to read input: %v", err)
@@ -212,6 +235,7 @@ func main() {
 		}
 	}
 
+	// Part 1: just send it.
 	log.Printf("Seeds: %v", seeds)
 	min := lib.MaxUint
 	startTime := time.Now()
@@ -223,21 +247,21 @@ func main() {
 	log.Printf("Took %s", time.Since(startTime))
 	fmt.Printf("Minimum location (part 1): %d\n", min)
 
-	// Part2: Expand seed list.
+	// Part 2: Expand seed list and run things in parallel.
 	if len(seeds)%2 != 0 {
 		log.Fatalf("Unbalanced seed count: must be even, got %d", len(seeds))
 	}
 	min = lib.MaxUint
-	log.Print("Expanding seeds (batches)")
 
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 	c := make(chan intPair)
-	for i := 0; i < 10; i++ {
+	for i := 0; i < *numWorkers; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			for batchRange := range c {
+				startTime := time.Now()
 				batchSet := makeBatch(batchRange)
 				printMaps("seed", things, batchSet, func(id int, dstType string, dstId int) {
 					if dstType == "location" {
@@ -246,31 +270,27 @@ func main() {
 						mu.Unlock()
 					}
 				})
+				log.Printf("\tBatch [%10d-%10d] (len=%10d) in %s", batchRange.a, batchRange.b-1, batchRange.b-batchRange.a, time.Since(startTime))
 			}
 		}()
 	}
 
-	startTime = time.Now()
+	// Prepare batches.
+	var batches []intPair
 	for i := 0; i < len(seeds); i += 2 {
 		lo := seeds[i]
 		run := seeds[i+1]
-		log.Printf("\tExpanding [%10d-%10d] (len=%10d)", lo, lo+run-1, run)
-		batchSize := 1_000_000
-		batches := makeBatchSpec(lo, lo+run, batchSize)
-		for _, batchRange := range batches {
-			c <- batchRange
-			//	batchSet := makeBatch(batchRange)
-			//	printMaps("seed", things, batchSet, func(id int, dstType string, dstId int) {
-			//		if dstType == "location" {
-			//			min = lib.Min(uint(dstId), min)
-			//		}
-			//	})
-			//	log.Printf("Batch %d/%d (%d elements) took %s", batchId, len(batches), len(batchSet), time.Since(startTime))
-		}
+		batches = append(batches, makeBatchSpec(lo, lo+run, *batchSize)...)
+	}
+
+	// Enqueue the batches.
+	startTime = time.Now()
+	log.Printf("Launching %d batches on %d workers", len(batches), *numWorkers)
+	for _, batchRange := range batches {
+		c <- batchRange
 	}
 	close(c)
 	wg.Wait()
-
 	log.Printf("Took %s", time.Since(startTime))
 	fmt.Printf("Minimum location (part 2): %d\n", min)
 }
