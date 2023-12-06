@@ -17,15 +17,9 @@ type gameInfo struct {
 func (gi gameInfo) NumNeeded() (r int, g int, b int) {
 	for _, round := range gi.rounds {
 		tmpr, tmpg, tmpb := round.NumNeeded()
-		if tmpr > r {
-			r = tmpr
-		}
-		if tmpg > g {
-			g = tmpg
-		}
-		if tmpb > b {
-			b = tmpb
-		}
+		r = lib.Max(r, tmpr)
+		g = lib.Max(g, tmpg)
+		b = lib.Max(b, tmpb)
 	}
 	return
 }
@@ -142,40 +136,31 @@ func main() {
 	minRed := 0
 	minGreen := 0
 	minBlue := 0
+	sum := 0
 	powerSum := 0
 	var possibleGames []*gameInfo
 
 	log.Printf("Finding possible games with max (r,g,b)=(%d,%d,%d)", maxRed, maxGreen, maxBlue)
 	for _, g := range games {
 		needr, needg, needb := g.NumNeeded()
-		if needr > minRed {
-			minRed = needr
-		}
-		if needg > minGreen {
-			minGreen = needg
-		}
-		if needb > minBlue {
-			minBlue = needb
-		}
+		minRed = lib.Max(needr, minRed)
+		minGreen = lib.Max(needg, minGreen)
+		minBlue = lib.Max(needb, minBlue)
 		power := needr * needg * needb
 		powerSum += power
 
 		if needr <= maxRed && needg <= maxGreen && needb <= maxBlue {
 			possibleGames = append(possibleGames, g)
-			log.Printf("\t    POSSIBLE %v", g)
+			sum += g.gameId
+			log.Printf("\tGame %3d:     POSSIBLE. Needs (r,g,b)=(%2d,%2d,%2d). Power = %d", g.gameId, needr, needg, needb, power)
 		} else {
-			log.Printf("\tNOT POSSIBLE %v", g.gameId)
+			log.Printf("\tGame %3d: NOT POSSIBLE. Needs (r,g,b)=(%2d,%2d,%2d). Power = %d", g.gameId, needr, needg, needb, power)
 		}
 	}
 
-	sum := 0
 	log.Printf("%d possible games", len(possibleGames))
-	for _, g := range possibleGames {
-		log.Printf("\t%v", g)
-		sum += g.gameId
-	}
-
-	log.Printf("Sum of possible games: %d", sum)
 	log.Printf("Needs for all to be possible: r=%d, g=%d, b=%d", minRed, minGreen, minBlue)
+	log.Printf("")
+	log.Printf("Sum of possible games: %d", sum)
 	log.Printf("Sum of all powers: %d", powerSum)
 }
