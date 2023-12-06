@@ -1,6 +1,7 @@
 package lib
 
 import (
+	"strconv"
 	"strings"
 )
 
@@ -31,6 +32,18 @@ func RuneToDigit(r rune) int {
 	}
 }
 
+func RuneListToInt(rs []rune) int {
+	var sb strings.Builder
+	for _, r := range rs {
+		sb.WriteRune(r)
+	}
+	n, err := strconv.ParseInt(sb.String(), 10, 32)
+	if err != nil {
+		return 0
+	}
+	return int(n)
+}
+
 func WordToNum(s string) (int, bool) {
 	switch {
 	case strings.HasSuffix(s, "one"):
@@ -53,4 +66,29 @@ func WordToNum(s string) (int, bool) {
 		return 9, true
 	}
 	return 0, false
+}
+
+type ExtractedNumber struct {
+	Value  int // actual number
+	Digits int // length in number of digits
+	Offset int // offset from 0-index start of line
+}
+
+func ExtractNumbers(s string) []ExtractedNumber {
+	var res []ExtractedNumber
+	var collect []rune
+	for i, r := range s {
+		if IsNum(r) {
+			collect = append(collect, r)
+		} else if len(collect) > 0 {
+			value := RuneListToInt(collect)
+			res = append(res, ExtractedNumber{
+				Value:  value,
+				Digits: len(collect),
+				Offset: i - len(collect),
+			})
+			collect = nil
+		}
+	}
+	return res
 }
