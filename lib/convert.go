@@ -92,3 +92,11 @@ func ExtractNumbers(s string) []ExtractedNumber {
 	}
 	return res
 }
+
+func StrToInt(s []string) []int {
+	res := make([]int, len(s))
+	for i := 0; i < len(s); i++ {
+		res[i] = int(Must(strconv.ParseInt(s[i], 10, 64)))
+	}
+	return res
+}
