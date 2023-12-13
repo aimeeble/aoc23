@@ -48,7 +48,7 @@ func (pm *pipeMap) isValid(sx, sy, dx, dy int) bool {
 	if sx+dx < 0 || sx+dx >= len(pm.grid[0]) {
 		return false
 	}
-	if sy+dy < 0 || sx+dy >= len(pm.grid) {
+	if sy+dy < 0 || sy+dy >= len(pm.grid) {
 		return false
 	}
 	return true
