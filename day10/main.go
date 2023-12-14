@@ -9,10 +9,19 @@ import (
 	"strings"
 )
 
+var (
+	doSVG   = flag.Bool("svg", false, "render a SVG of the main path")
+	doPart1 = flag.Bool("part1", false, "solve part 1")
+	doPart2 = flag.Bool("part2", false, "solve part 2")
+)
+
 type pipeMap struct {
 	grid     [][]string
 	dist     [][]int
 	startPos []int
+
+	// list of 2-tuples [(x0,y0), (x1,y1), ...], with corners[0] == startPos.
+	corners [][]int
 }
 
 func (pm *pipeMap) renderGrid() string {
@@ -62,7 +71,135 @@ func (pm *pipeMap) isValid(sx, sy, dx, dy int) bool {
 	return true
 }
 
+func (pm *pipeMap) renderSVG() string {
+	maxX := 0
+	maxY := 0
+	for _, pt := range pm.corners {
+		if pt[0] > maxX {
+			maxX = pt[0]
+		}
+		if pt[1] > maxY {
+			maxY = pt[1]
+		}
+	}
+	maxX *= 10
+	maxY *= 10
+
+	var sb strings.Builder
+	sb.WriteString("<html><body>\n")
+	fmt.Fprintf(&sb, "<svg height=\"%d\" width=\"%d\">\n", maxX+50, maxY+50)
+
+	// Draw with a polygon.
+	fmt.Fprintf(&sb, "  <polygon style=\"fill:rgb(0,128,64);stroke:rgb(0,0,0);stroke-width:2\" points=\"")
+	for _, pt := range pm.corners {
+		fmt.Fprintf(&sb, "%d,%d ", pt[0]*10, pt[1]*10)
+	}
+	fmt.Fprintf(&sb, "\"></polygon>\n")
+
+	// circle starting position
+	fmt.Fprintf(&sb, "  <circle cx=\"%d\" cy=\"%d\" r=\"%d\" style=\"stroke:rgb(0,0,0);stroke-width:2;fill:rgba(0,255,64,0.8)\"></circle>\n",
+		pm.corners[0][0]*10, pm.corners[0][1]*10, 5,
+	)
+
+	sb.WriteString("</svg>\n")
+	sb.WriteString("</body></html>\n")
+
+	return sb.String()
+}
+
+func (pm *pipeMap) findCorners() {
+	var innerDFS func(x, y int, seen [][]bool)
+	innerDFS = func(x, y int, seen [][]bool) {
+		if seen[y][x] {
+			return
+		}
+		seen[y][x] = true
+
+		curPipe := pm.grid[y][x]
+		//log.Printf("Processing [%d %d] %s", x, y, curPipe)
+		switch curPipe {
+		case "F":
+			pm.corners = append(pm.corners, []int{x, y})
+
+			// valid: right
+			if pm.isValid(x, y, +1, 0) {
+				innerDFS(x+1, y, seen)
+			}
+			// valid: down
+			if pm.isValid(x, y, 0, +1) {
+				innerDFS(x, y+1, seen)
+			}
+
+		case "L":
+			pm.corners = append(pm.corners, []int{x, y})
+
+			// valid: right
+			if pm.isValid(x, y, +1, 0) {
+				innerDFS(x+1, y, seen)
+			}
+			// valid: up
+			if pm.isValid(x, y, 0, -1) {
+				innerDFS(x, y-1, seen)
+			}
+
+		case "7":
+			pm.corners = append(pm.corners, []int{x, y})
+
+			// valid: left
+			if pm.isValid(x, y, -1, 0) {
+				innerDFS(x-1, y, seen)
+			}
+			// valid: down
+			if pm.isValid(x, y, 0, +1) {
+				innerDFS(x, y+1, seen)
+			}
+
+		case "J":
+			pm.corners = append(pm.corners, []int{x, y})
+
+			// valid: left
+			if pm.isValid(x, y, -1, 0) {
+				innerDFS(x-1, y, seen)
+			}
+			// valid: up
+			if pm.isValid(x, y, 0, -1) {
+				innerDFS(x, y-1, seen)
+			}
+
+		case "-":
+			// valid: left
+			if pm.isValid(x, y, -1, 0) {
+				innerDFS(x-1, y, seen)
+			}
+			// valid: right
+			if pm.isValid(x, y, +1, 0) {
+				innerDFS(x+1, y, seen)
+			}
+
+		case "|":
+			// valid: up
+			if pm.isValid(x, y, 0, -1) {
+				innerDFS(x, y-1, seen)
+			}
+			// valid: down
+			if pm.isValid(x, y, 0, +1) {
+				innerDFS(x, y+1, seen)
+			}
+
+		default:
+		}
+	}
+
+	seen := make([][]bool, len(pm.grid))
+	for i := 0; i < len(pm.grid); i++ {
+		seen[i] = make([]bool, len(pm.grid[0]))
+	}
+	innerDFS(pm.startPos[0], pm.startPos[1], seen)
+}
+
 func (pm *pipeMap) dfsDistance(sx, sy int) {
+	log.Printf("Starting DFS at [%d %d] -> %s", sx, sy, pm.grid[sy][sx])
+
 	var innerDFS func(x, y, curDist int, seen [][]bool)
 	innerDFS = func(x, y, curDist int, seen [][]bool) {
 		if seen[y][x] {
@@ -232,26 +369,35 @@ func main() {
 		log.Fatal("Invalid starting position / starting position not specified")
 	}
 	pipes.replaceStartPos()
+	pipes.findCorners()
 
+	log.Printf("Corners:")
+	for i, corn := range pipes.corners {
+		log.Printf("  [%2d] %v", i, corn)
+	}
 	log.Printf("Grid:\n%s", pipes.renderGrid())
 
-	x, y := pipes.startPos[0], pipes.startPos[1]
-	log.Printf("Starting at %v -> %s", pipes.startPos, pipes.grid[y][x])
-
-	pipes.dfsDistance(x, y)
-	fmt.Printf("Dist:\n%s\n", pipes.renderDist())
-
-	// Part 1: find longest
-	max := 0
-	var maxLoc []int
-	for y, row := range pipes.dist {
-		for x, d := range row {
-			if d > max {
-				max = d
-				maxLoc = []int{x, y}
-			}
-		}
+	if *doSVG {
+		fmt.Printf("%s\n", pipes.renderSVG())
 	}
 
-	fmt.Printf("Max distance is at %v = %d\n", maxLoc, max)
+	if *doPart1 {
+		x, y := pipes.startPos[0], pipes.startPos[1]
+		pipes.dfsDistance(x, y)
+		fmt.Printf("Dist:\n%s\n", pipes.renderDist())
+
+		// Part 1: find longest
+		max := 0
+		var maxLoc []int
+		for y, row := range pipes.dist {
+			for x, d := range row {
+				if d > max {
+					max = d
+					maxLoc = []int{x, y}
+				}
+			}
+		}
+
+		fmt.Printf("Max distance is at %v = %d\n", maxLoc, max)
+	}
 }
