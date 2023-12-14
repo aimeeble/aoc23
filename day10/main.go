@@ -17,9 +17,13 @@ type pipeMap struct {
 
 func (pm *pipeMap) renderGrid() string {
 	var sb strings.Builder
-	for _, gridrow := range pm.grid {
-		for _, p := range gridrow {
-			fmt.Fprintf(&sb, "%2s", p)
+	for y, gridrow := range pm.grid {
+		for x, p := range gridrow {
+			if x == pm.startPos[0] && y == pm.startPos[1] {
+				fmt.Fprintf(&sb, "\x1b[32m%2s\x1b[0m", p)
+			} else {
+				fmt.Fprintf(&sb, "%2s", p)
+			}
 		}
 		sb.WriteString("\n")
 	}
@@ -31,9 +35,13 @@ func (pm *pipeMap) renderDist() string {
 	for y, distrow := range pm.dist {
 		for x, dist := range distrow {
 			if pm.grid[y][x] == "." {
-				sb.WriteString("   .")
+				sb.WriteString(" .")
 			} else {
-				fmt.Fprintf(&sb, "%4s", lib.Base10ToBase62(dist))
+				if dist > 0 {
+					fmt.Fprintf(&sb, "\x1b[32m%2s\x1b[0m", lib.Base10ToBase62(dist))
+				} else {
+					fmt.Fprintf(&sb, "%2s", lib.Base10ToBase62(dist))
+				}
 			}
 		}
 		sb.WriteString("\n")
