@@ -76,38 +76,8 @@ func (pm *pipeMap) dfsDistance(sx, sy int) {
 		pm.dist[y][x] = curDist
 
 		curPipe := pm.grid[y][x]
-		log.Printf("Processing [%d %d] %s", x, y, curPipe)
+		//log.Printf("Processing [%d %d] %s", x, y, curPipe)
 		switch curPipe {
-		case "S":
-			// valid: unknown; must inspect adjacent elements
-			if pm.isValid(x, y, 0, -1) {
-				switch pm.grid[y-1][x] {
-				case "|", "F", "7":
-					// Flow down into S, so we can recurse up.
-					innerDFS(x, y-1, curDist+1, seen)
-				}
-			}
-			if pm.isValid(x, y, 0, +1) {
-				switch pm.grid[y+1][x] {
-				case "|", "L", "J":
-					// Flow up into S, so we can recurse down.
-					innerDFS(x, y+1, curDist+1, seen)
-				}
-			}
-			if pm.isValid(x, y, -1, 0) {
-				switch pm.grid[y][x-1] {
-				case "-", "F", "L":
-					// Flow right into S, so we can recurse left.
-					innerDFS(x-1, y, curDist+1, seen)
-				}
-			}
-			if pm.isValid(x, y, +1, 0) {
-				switch pm.grid[y][x+1] {
-				case "-", "J", "7":
-					// Flow left into S, so we can recurse right.
-					innerDFS(x+1, y, curDist+1, seen)
-				}
-			}
 		case "|":
 			// valid: up
 			if pm.isValid(x, y, 0, -1) {
@@ -177,6 +147,63 @@ func (pm *pipeMap) dfsDistance(sx, sy int) {
 	innerDFS(sx, sy, 0, seen)
 }
 
+func (pm *pipeMap) replaceStartPos() {
+	x, y := pm.startPos[0], pm.startPos[1]
+	okayUp := false
+	okayDn := false
+	okayRi := false
+	okayLe := false
+
+	// valid: unknown; must inspect adjacent elements
+	if pm.isValid(x, y, 0, -1) {
+		switch pm.grid[y-1][x] {
+		case "|", "F", "7":
+			// Flow down into S, so we can recurse up.
+			okayUp = true
+		}
+	}
+	if pm.isValid(x, y, 0, +1) {
+		switch pm.grid[y+1][x] {
+		case "|", "L", "J":
+			// Flow up into S, so we can recurse down.
+			okayDn = true
+		}
+	}
+	if pm.isValid(x, y, -1, 0) {
+		switch pm.grid[y][x-1] {
+		case "-", "F", "L":
+			// Flow right into S, so we can recurse left.
+			okayLe = true
+		}
+	}
+	if pm.isValid(x, y, +1, 0) {
+		switch pm.grid[y][x+1] {
+		case "-", "J", "7":
+			// Flow left into S, so we can recurse right.
+			okayRi = true
+		}
+	}
+
+	newStart := ""
+	switch {
+	case okayLe && okayRi:
+		newStart = "-"
+	case okayUp && okayDn:
+		newStart = "|"
+	case okayUp && okayRi:
+		newStart = "L"
+	case okayUp && okayLe:
+		newStart = "J"
+	case okayDn && okayRi:
+		newStart = "F"
+	case okayDn && okayLe:
+		newStart = "7"
+	default:
+		log.Fatalf("Cannot infer what S should be replaced with")
+	}
+	pm.grid[y][x] = newStart
+}
+
 func main() {
 	flag.Parse()
 
@@ -204,6 +231,7 @@ func main() {
 	if pipes.startPos == nil {
 		log.Fatal("Invalid starting position / starting position not specified")
 	}
+	pipes.replaceStartPos()
 
 	log.Printf("Grid:\n%s", pipes.renderGrid())
 
