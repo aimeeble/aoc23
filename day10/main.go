@@ -16,12 +16,11 @@ var (
 )
 
 type pipeMap struct {
-	grid     [][]string
-	dist     [][]int
-	startPos []int
-
-	// list of 2-tuples [(x0,y0), (x1,y1), ...], with corners[0] == startPos.
-	corners [][]int
+	grid     [][]string // represents the full grid and pipe layout.
+	dist     [][]int    // shortest distance to the starting position along the path.
+	startPos []int      // starting position 2-tuple.
+	groups   [][]int    // what connected group each cell is a part of.
+	corners  [][]int    // list of 2-tuples [(x0,y0), (x1,y1), ...], with corners[0] == startPos.
 }
 
 func (pm *pipeMap) renderGrid() string {
@@ -30,6 +29,23 @@ func (pm *pipeMap) renderGrid() string {
 		for x, p := range gridrow {
 			if x == pm.startPos[0] && y == pm.startPos[1] {
 				fmt.Fprintf(&sb, "\x1b[32m%2s\x1b[0m", p)
+			} else {
+				fmt.Fprintf(&sb, "%2s", p)
+			}
+		}
+		sb.WriteString("\n")
+	}
+	return sb.String()
+}
+
+func (pm *pipeMap) renderGroups() string {
+	var sb strings.Builder
+	for y, gridrow := range pm.grid {
+		for x, p := range gridrow {
+			if x == pm.startPos[0] && y == pm.startPos[1] {
+				fmt.Fprintf(&sb, "\x1b[32m%2s\x1b[0m", p)
+			} else if pm.groups[y][x] > 0 {
+				fmt.Fprintf(&sb, "\x1b[35m%2s\x1b[0m", p)
 			} else {
 				fmt.Fprintf(&sb, "%2s", p)
 			}
@@ -341,6 +357,99 @@ func (pm *pipeMap) replaceStartPos() {
 	pm.grid[y][x] = newStart
 }
 
+func (pm *pipeMap) findGroups() {
+	isInside := func(x, y int) bool {
+		prevPt := pm.corners[len(pm.corners)-1]
+		c := false
+		for _, pt := range pm.corners {
+			lineX1 := lib.Min(pt[0], prevPt[0])
+			lineX2 := lib.Max(pt[0], prevPt[0])
+			lineY1 := lib.Min(pt[1], prevPt[1])
+			lineY2 := lib.Min(pt[1], prevPt[1])
+
+			if (x == pt[0]) && (y == pt[1]) {
+				// corner of line, consider that outside.
+				return false
+			} else if y == pt[1] && x >= lineX1 && x <= lineX2 {
+				// on line, consider that outside.
+				return false
+			} else if x == pt[0] && y >= lineY1 && y <= lineY2 {
+				// on line, consider that outside.
+				return false
+			} else if (pt[1] > y) != (prevPt[1] > y) {
+				// our (x,y)-point crosses the line.
+				slope := (x-pt[0])*(prevPt[1]-pt[1]) -
+					(y-pt[1])*(prevPt[0]-pt[0])
+				if slope == 0 {
+					// on line.
+					return false
+				}
+				if (slope < 0) != (prevPt[1] < pt[1]) {
+					c = !c
+				}
+			}
+
+			prevPt = pt
+		}
+		return c
+	}
+
+	for sy, row := range pm.grid {
+		for sx := range row {
+			in := isInside(sx, sy)
+			//log.Printf("[%d %d]: %t", sx, sy, in)
+			if in {
+				pm.groups[sy][sx] = 1
+			}
+		}
+	}
+}
+
+func (pm *pipeMap) enclosedArea() int {
+	var helper func(x, y int, seen [][]bool) int
+	helper = func(x, y int, seen [][]bool) int {
+		if seen[y][x] {
+			return 0
+		}
+		seen[y][x] = true
+
+		mySize := 1
+		if pm.dist[y][x] > 0 || pm.groups[y][x] == 0 {
+			// it's on or outside the path.
+			return 0
+		}
+
+		for _, dir := range [][]int{
+			{0, -1},  // N
+			{0, +1},  // S
+			{+1, 0},  // E
+			{-1, 0},  // W
+			{+1, -1}, // NE
+			{+1, +1}, // SE
+			{-1, -1}, // NW
+			{-1, +1}, // NE
+		} {
+			if pm.isValid(x, y, dir[0], dir[1]) {
+				mySize += helper(x+dir[0], y+dir[1], seen)
+			}
+		}
+
+		return mySize
+	}
+
+	seen := make([][]bool, len(pm.grid))
+	for i := 0; i < len(pm.grid); i++ {
+		seen[i] = make([]bool, len(pm.grid[0]))
+	}
+	sum := 0
+	for sy, row := range pm.grid {
+		for sx := range row {
+			sum += helper(sx, sy, seen)
+		}
+	}
+	return sum
+}
+
 func main() {
 	flag.Parse()
 
@@ -350,8 +459,9 @@ func main() {
 	}
 
 	pipes := &pipeMap{
-		grid: make([][]string, len(lines)),
-		dist: make([][]int, len(lines)),
+		grid:   make([][]string, len(lines)),
+		dist:   make([][]int, len(lines)),
+		groups: make([][]int, len(lines)),
 	}
 
 	for y, line := range lines {
@@ -363,6 +473,7 @@ func main() {
 			}
 			pipes.grid[y] = append(pipes.grid[y], p)
 			pipes.dist[y] = append(pipes.dist[y], 0)
+			pipes.groups[y] = append(pipes.groups[y], 0)
 		}
 	}
 	if pipes.startPos == nil {
@@ -399,5 +510,11 @@ func main() {
 		}
 
 		fmt.Printf("Max distance is at %v = %d\n", maxLoc, max)
+	}
+
+	if *doPart2 {
+		pipes.findGroups()
+		fmt.Printf("Groups:\n%s", pipes.renderGroups())
+		fmt.Printf("Enclosed area: %d\n", pipes.enclosedArea())
 	}
 }
