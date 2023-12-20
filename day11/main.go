@@ -10,7 +10,7 @@ import (
 )
 
 var (
-	doPart1 = flag.Bool("part1", false, "do part 1")
+	scaleFactor = flag.Int("scale", 2, "scale factor (part1=>2, part2=>1_000_000)")
 )
 
 func manDist(p, q []int) int {
@@ -47,8 +47,12 @@ func main() {
 				gridLine = append(gridLine, 0)
 			}
 		}
-		grid = append(grid, gridLine)
 		if expand {
+			for i := range gridLine {
+				gridLine[i] = -1
+			}
+			grid = append(grid, gridLine)
+		} else {
 			grid = append(grid, gridLine)
 		}
 	}
@@ -62,19 +66,34 @@ func main() {
 		}
 		if expand {
 			for i, gridLine := range grid {
-				newLine := append(gridLine[:x], 0)
-				newLine = append(newLine, gridLine[x:]...)
-				grid[i] = newLine
+				gridLine[x] = -1
+				grid[i] = gridLine
 			}
-			x++
 		}
 	}
+
 	galaxies := make(map[int][]int)
-	for y, row := range grid {
-		for x, el := range row {
-			if el > 0 {
-				galaxies[el] = []int{x, y}
+	y := 0
+	for _, row := range grid {
+		if row[0] == -1 {
+			// Line is empty, expand by scale factor
+			y += *scaleFactor
+		} else {
+			x := 0
+			for _, el := range row {
+				if el > 0 {
+					// Add a galaxy, and move once.
+					galaxies[el] = []int{x, y}
+					x++
+				} else if el < 0 {
+					// Expand by moving scaleFactor.
+					x += *scaleFactor
+				} else {
+					// Just move once.
+					x++
+				}
 			}
+			y++
 		}
 	}
 
@@ -82,14 +101,15 @@ func main() {
 	for _, row := range grid {
 		for _, el := range row {
 			if el == 0 {
-				fmt.Fprintf(&sb, " .")
+				fmt.Fprintf(&sb, "  .")
 			} else {
-				fmt.Fprintf(&sb, "%2d", el)
+				fmt.Fprintf(&sb, "%3d", el)
 			}
 		}
 		sb.WriteString("\n")
 	}
-	log.Printf("Grid:\n%s", sb.String())
+	log.Printf("Grid:\n%s\n", sb.String())
+
 	log.Printf("Galaxies:")
 	keys := lib.Keys(galaxies)
 	for _, k := range keys {
@@ -97,15 +117,13 @@ func main() {
 		log.Printf("  [%2d] %v", k, g)
 	}
 
-	if *doPart1 {
-		sum := 0
-		for i, k1 := range keys {
-			for _, k2 := range keys[i+1:] {
-				d := manDist(galaxies[k1], galaxies[k2])
-				log.Printf("Distance %d -> %d = %d", k1, k2, d)
-				sum += d
-			}
+	sum := 0
+	for i, k1 := range keys {
+		for _, k2 := range keys[i+1:] {
+			d := manDist(galaxies[k1], galaxies[k2])
+			log.Printf("Distance %d -> %d = %d", k1, k2, d)
+			sum += d
 		}
-		fmt.Printf("Total distance: %d\n", sum)
 	}
+	fmt.Printf("Total distance: %d\n", sum)
 }
